@@ -14,6 +14,4 @@ COPY main.py .
 
 RUN mkdir -p /app/data
 
-VOLUME ["/app/data"]
-
 CMD ["python", "main.py"]
