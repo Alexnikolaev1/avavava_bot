@@ -42,7 +42,10 @@ class Settings:
                 "AVATAR_MODEL",
                 "black-forest-labs/flux-schnell",
             ),
-            sadtalker_model=os.environ.get("SADTALKER_MODEL", "cjwbw/sadtalker"),
+            sadtalker_model=os.environ.get(
+                "SADTALKER_MODEL",
+                "lucataco/sadtalker:85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b",
+            ),
             max_audio_seconds=_int("MAX_AUDIO_SECONDS", 75),
             max_concurrent_jobs=_int("MAX_CONCURRENT_JOBS", 2),
             user_cooldown_seconds=_int("USER_COOLDOWN_SECONDS", 60),

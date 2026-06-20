@@ -213,13 +213,25 @@ class GenerationPipeline:
                 )
             except replicate.exceptions.ReplicateError as exc:
                 log.exception("Replicate video error chat_id=%s", job.chat_id)
-                await self.safe_edit(
-                    job.chat_id,
-                    job.status_message_id,
-                    "Сервис генерации вернул ошибку. "
-                    "Попробуй перегенерировать аватар или другое фото.\n"
-                    f"Детали: {exc}",
-                )
+                detail = str(exc)
+                if "404" in detail or "not found" in detail.lower():
+                    user_msg = (
+                        "Модель SadTalker не найдена на Replicate (404).\n"
+                        "В Railway Variables замени SADTALKER_MODEL на:\n"
+                        "lucataco/sadtalker:85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b"
+                    )
+                elif "402" in detail or "payment" in detail.lower():
+                    user_msg = (
+                        "На Replicate закончился баланс или не подключена оплата. "
+                        "Пополни счёт на replicate.com/account/billing"
+                    )
+                else:
+                    user_msg = (
+                        "Сервис генерации вернул ошибку. "
+                        "Попробуй перегенерировать аватар или другое фото.\n"
+                        f"Детали: {exc}"
+                    )
+                await self.safe_edit(job.chat_id, job.status_message_id, user_msg)
             except Exception as exc:  # noqa: BLE001
                 log.exception("Video error chat_id=%s", job.chat_id)
                 await self.safe_edit(

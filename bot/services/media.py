@@ -104,29 +104,84 @@ class SadTalkerService:
         *,
         cartoon: bool = True,
     ) -> str:
-        log.info(
-            "Running SadTalker model=%s cartoon=%s",
-            self._settings.sadtalker_model,
-            cartoon,
-        )
+        wav_path = audio_path.with_suffix(".wav")
+        await convert_audio_to_wav(audio_path, wav_path)
+
+        model = self._settings.sadtalker_model
+        inputs = self._build_inputs(model, image_path, wav_path, cartoon=cartoon)
+        log.info("Running SadTalker model=%s cartoon=%s", model, cartoon)
+        return await self._replicate.run(model, inputs)
+
+    @staticmethod
+    def _build_inputs(
+        model: str,
+        image_path: Path,
+        audio_path: Path,
+        *,
+        cartoon: bool,
+    ) -> dict[str, Any]:
+        model_key = model.lower()
+        if "cjwbw/sadtalker" in model_key:
+            if cartoon:
+                return {
+                    "source_image": image_path,
+                    "driven_audio": audio_path,
+                    "use_enhancer": False,
+                    "preprocess": "crop",
+                    "still_mode": True,
+                    "size_of_image": 256,
+                }
+            return {
+                "source_image": image_path,
+                "driven_audio": audio_path,
+                "use_enhancer": True,
+                "preprocess": "full",
+                "still_mode": True,
+            }
+
+        # lucataco/sadtalker и другие форки с классическими полями
         if cartoon:
-            inputs = {
+            return {
                 "source_image": image_path,
                 "driven_audio": audio_path,
                 "enhancer": None,
                 "preprocess": "crop",
                 "still": True,
-                "face_model_resolution": "256",
             }
-        else:
-            inputs = {
-                "source_image": image_path,
-                "driven_audio": audio_path,
-                "enhancer": "gfpgan",
-                "preprocess": "full",
-                "still": True,
-            }
-        return await self._replicate.run(self._settings.sadtalker_model, inputs)
+        return {
+            "source_image": image_path,
+            "driven_audio": audio_path,
+            "enhancer": "gfpgan",
+            "preprocess": "full",
+            "still": True,
+        }
+
+
+async def convert_audio_to_wav(input_path: Path, output_path: Path) -> None:
+    """SadTalker принимает wav/mp4; Telegram voice приходит как ogg."""
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-ar",
+        "16000",
+        "-ac",
+        "1",
+        "-c:a",
+        "pcm_s16le",
+        str(output_path),
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg audio convert failed: {stderr.decode(errors='ignore')[-500:]}"
+        )
 
 
 async def prepare_avatar_image(path: Path, size: int = 512) -> None:

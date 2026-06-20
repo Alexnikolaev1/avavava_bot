@@ -67,7 +67,7 @@ python main.py
 | Переменная | По умолчанию |
 |------------|--------------|
 | `AVATAR_MODEL` | `black-forest-labs/flux-schnell` |
-| `SADTALKER_MODEL` | `cjwbw/sadtalker` |
+| `SADTALKER_MODEL` | `lucataco/sadtalker:85c698db...` (см. `.env.example`) |
 | `MAX_FAVORITES_PER_USER` | `10` |
 | `DATABASE_PATH` | `data/bot.db` |
 | `MAX_AUDIO_SECONDS` | `75` |
