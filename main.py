@@ -25,11 +25,12 @@ async def main() -> None:
     await favorites.connect()
 
     log.info(
-        "Bot started | jobs=%s | favorites=%s | avatar=%s | sadtalker=%s",
+        "Bot started | jobs=%s | favorites=%s | avatar=%s | sadtalker=%s | kling=%s",
         settings.max_concurrent_jobs,
         settings.max_favorites_per_user,
         settings.avatar_model,
         settings.sadtalker_model,
+        settings.kling_avatar_model,
     )
     try:
         await dp.start_polling(pipeline.bot)

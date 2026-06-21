@@ -10,7 +10,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import Settings
-from bot.handlers import avatar, common, favorites, photo
+from bot.handlers import avatar, common, favorites, mascot, photo
 from bot.services.favorites import FavoritesStore
 from bot.services.pipeline import GenerationPipeline
 
@@ -39,5 +39,6 @@ def create_app(settings: Settings) -> tuple[Dispatcher, GenerationPipeline, Favo
     router.include_router(favorites.router)
     router.include_router(avatar.router)
     router.include_router(photo.router)
+    router.include_router(mascot.router)
     dp.include_router(router)
     return dp, pipeline, favorites_store

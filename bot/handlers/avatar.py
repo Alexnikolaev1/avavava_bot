@@ -246,6 +246,7 @@ async def receive_audio(
                 audio_file_id=audio.file_id,
                 audio_duration=duration,
                 cartoon=source != "photo",
+                kling_fallback=True,
             )
         )
     )

@@ -12,6 +12,11 @@ class AvatarFlow(StatesGroup):
     naming_favorite = State()
 
 
+class MascotFlow(StatesGroup):
+    waiting_for_photo = State()
+    waiting_for_audio = State()
+
+
 class PhotoFlow(StatesGroup):
     waiting_for_photo = State()
     waiting_for_audio = State()

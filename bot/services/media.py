@@ -14,6 +14,43 @@ from bot.config import Settings
 
 log = logging.getLogger(__name__)
 
+LANDMARK_ERROR_MARKERS = (
+    "can not detect the landmark",
+    "cannot detect the landmark",
+    "no face detected",
+)
+
+
+def is_landmark_failure(exc: ReplicateModelFailed) -> bool:
+    combined = f"{exc}\n{exc.logs or ''}".lower()
+    return any(marker in combined for marker in LANDMARK_ERROR_MARKERS)
+
+
+def parse_replicate_failure(error: Any, logs: str) -> str:
+    """Достаёт реальную причину из logs — SadTalker иногда кладёт мусор в error."""
+    if logs:
+        for line in reversed(logs.splitlines()):
+            cleaned = line.strip()
+            lower = cleaned.lower()
+            if "can not detect the landmark" in lower:
+                return "can not detect the landmark from source image"
+            if "no face" in lower and "detect" in lower:
+                return cleaned
+            if cleaned.startswith("raise ") and ("'" in cleaned or '"' in cleaned):
+                for quote in ("'", '"'):
+                    if quote in cleaned:
+                        parts = cleaned.split(quote)
+                        if len(parts) >= 2 and parts[1]:
+                            return parts[1]
+
+    if isinstance(error, str) and "exceptions must derive from baseexception" not in error.lower():
+        return error
+    if logs and any(marker in logs.lower() for marker in LANDMARK_ERROR_MARKERS):
+        return "can not detect the landmark from source image"
+    if isinstance(error, str):
+        return error
+    return "модель завершилась с ошибкой"
+
 
 class ReplicateModelFailed(RuntimeError):
     """SadTalker/Flux вернули failed prediction с понятным текстом."""
@@ -66,15 +103,8 @@ class ReplicateService:
 
     @staticmethod
     def _model_error(exc: ModelError) -> ReplicateModelFailed:
-        raw = exc.prediction.error
-        if isinstance(raw, str):
-            message = raw
-        elif raw is None:
-            message = "модель завершилась с ошибкой"
-        else:
-            message = str(raw)
-
         logs = exc.prediction.logs or ""
+        message = parse_replicate_failure(exc.prediction.error, logs)
         log.error(
             "Replicate model failed: %s | prediction=%s | logs_tail=%s",
             message,
@@ -182,6 +212,57 @@ class SadTalkerService:
         if not cartoon:
             common["enhancer"] = "gfpgan"
         return common
+
+
+class KlingAvatarService:
+    """Kling Avatar V2 — работает с людьми, мультяшками и животными-маскотами."""
+
+    def __init__(self, replicate: ReplicateService, settings: Settings) -> None:
+        self._replicate = replicate
+        self._settings = settings
+
+    async def animate(self, image_path: Path, audio_path: Path) -> str:
+        mp3_path = audio_path.with_suffix(".kling.mp3")
+        await convert_audio_for_kling(audio_path, mp3_path)
+
+        model = self._settings.kling_avatar_model
+        log.info("Running Kling Avatar model=%s mode=%s", model, self._settings.kling_avatar_mode)
+        return await self._replicate.run(
+            model,
+            {
+                "image": image_path,
+                "audio": mp3_path,
+                "mode": self._settings.kling_avatar_mode,
+                "prompt": "character talking naturally to camera, expressive lip sync",
+            },
+        )
+
+
+async def convert_audio_for_kling(input_path: Path, output_path: Path) -> None:
+    """Kling принимает mp3/wav до 5 МБ."""
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-ar",
+        "44100",
+        "-ac",
+        "1",
+        "-b:a",
+        "128k",
+        str(output_path),
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg audio convert failed: {stderr.decode(errors='ignore')[-500:]}"
+        )
 
 
 async def convert_audio_to_wav(input_path: Path, output_path: Path) -> None:

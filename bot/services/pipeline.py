@@ -14,11 +14,13 @@ from bot.config import Settings
 from bot.models.avatar_config import AvatarConfig
 from bot.services.media import (
     AvatarGenerator,
+    KlingAvatarService,
     ReplicateModelFailed,
     ReplicateService,
     SadTalkerService,
     TelegramIO,
     compress_for_telegram,
+    is_landmark_failure,
 )
 
 log = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ class VideoJob:
     audio_file_id: str
     audio_duration: int | None = None
     cartoon: bool = True
+    engine: str = "sadtalker"
+    kling_fallback: bool = False
 
 
 class GenerationPipeline:
@@ -52,6 +56,7 @@ class GenerationPipeline:
         replicate_svc = ReplicateService(settings)
         self._avatar_gen = AvatarGenerator(replicate_svc, settings)
         self._sadtalker = SadTalkerService(replicate_svc, settings)
+        self._kling = KlingAvatarService(replicate_svc, settings)
         self._active_jobs = 0
 
     @property
@@ -161,17 +166,18 @@ class GenerationPipeline:
                     await self._io.download_file(job.image_file_id, image_path)
                     await self._io.download_file(job.audio_file_id, audio_path)
 
+                    status_text = (
+                        "Оживляю маскота (Kling Avatar)..."
+                        if job.engine == "kling"
+                        else "Оживляю персонажа (lip-sync)..."
+                    )
                     await self.safe_edit(
                         job.chat_id,
                         job.status_message_id,
-                        "Оживляю персонажа (lip-sync)...",
+                        status_text,
                     )
                     result_url = await asyncio.wait_for(
-                        self._sadtalker.animate(
-                            image_path,
-                            audio_path,
-                            cartoon=job.cartoon,
-                        ),
+                        self._animate(job, image_path, audio_path),
                         timeout=self._settings.generation_timeout_seconds,
                     )
                     await self._io.download_url(result_url, raw_video)
@@ -243,6 +249,27 @@ class GenerationPipeline:
             finally:
                 self._active_jobs -= 1
 
+    async def _animate(self, job: VideoJob, image_path: Path, audio_path: Path) -> str:
+        if job.engine == "kling":
+            return await self._kling.animate(image_path, audio_path)
+
+        try:
+            return await self._sadtalker.animate(
+                image_path,
+                audio_path,
+                cartoon=job.cartoon,
+            )
+        except ReplicateModelFailed as exc:
+            if job.kling_fallback and is_landmark_failure(exc):
+                await self.safe_edit(
+                    job.chat_id,
+                    job.status_message_id,
+                    "SadTalker не распознал лицо — пробую Kling Avatar "
+                    "(подходит для маскотов и животных)...",
+                )
+                return await self._kling.animate(image_path, audio_path)
+            raise
+
     @staticmethod
     def _format_replicate_error(exc: replicate.exceptions.ReplicateError) -> str:
         detail = str(exc)
@@ -268,8 +295,9 @@ class GenerationPipeline:
 
         if "face" in combined or "landmark" in combined or "detect" in combined:
             return (
-                "SadTalker не нашёл лицо на фото.\n"
-                "Пришли другое: анфас, хорошее освещение, лицо крупно, без очков."
+                "SadTalker не нашёл человеческое лицо на фото.\n\n"
+                "Для медведя, маскота или персонажа используй /mascot — "
+                "там другой движок (Kling Avatar), который умеет оживлять животных."
             )
         if "audio" in combined or "wav" in combined:
             return (
@@ -278,11 +306,8 @@ class GenerationPipeline:
             )
         if "exceptions must derive from baseexception" in combined:
             return (
-                "SadTalker упал на этих файлах (внутренняя ошибка модели).\n"
-                "Попробуй:\n"
-                "• другое фото — чёткий анфас\n"
-                "• аудио 10–30 сек\n"
-                "• режим /start с AI-персонажем вместо /photo"
+                "SadTalker не смог обработать это изображение.\n"
+                "Для маскота или животного нажми /mascot и пришли фото + аудио."
             )
 
         detail = str(exc)

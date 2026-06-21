@@ -9,43 +9,46 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.config import Settings
 from bot.handlers.common import check_cooldown
-from bot.keyboards import CB_PHOTO_MODE
+from bot.keyboards import CB_MASCOT_MODE
 from bot.services.pipeline import GenerationPipeline, VideoJob
-from bot.states import PhotoFlow
-from bot.texts import PHOTO_MODE_START, STATUS
+from bot.states import MascotFlow
+from bot.texts import MASCOT_MODE_START, STATUS
 
 router = Router()
 
 
-@router.callback_query(F.data == CB_PHOTO_MODE)
-async def cb_photo_mode(callback: CallbackQuery, state: FSMContext) -> None:
+@router.callback_query(F.data == CB_MASCOT_MODE)
+async def cb_mascot_mode(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
-    await state.set_state(PhotoFlow.waiting_for_photo)
-    await callback.message.answer(PHOTO_MODE_START)
+    await state.set_state(MascotFlow.waiting_for_photo)
+    await callback.message.answer(MASCOT_MODE_START)
     await callback.answer()
 
 
-@router.message(Command("photo"))
-async def cmd_photo_mode(message: Message, state: FSMContext) -> None:
+@router.message(Command("mascot"))
+async def cmd_mascot_mode(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await state.set_state(PhotoFlow.waiting_for_photo)
-    await message.answer(PHOTO_MODE_START)
+    await state.set_state(MascotFlow.waiting_for_photo)
+    await message.answer(MASCOT_MODE_START)
 
 
-@router.message(StateFilter(PhotoFlow.waiting_for_photo), F.photo)
-async def photo_mode_receive_photo(message: Message, state: FSMContext) -> None:
+@router.message(StateFilter(MascotFlow.waiting_for_photo), F.photo)
+async def mascot_receive_photo(message: Message, state: FSMContext) -> None:
     await state.update_data(avatar_file_id=message.photo[-1].file_id)
-    await state.set_state(PhotoFlow.waiting_for_audio)
-    await message.answer("Фото получил. Теперь пришли аудио (voice или файл).")
+    await state.set_state(MascotFlow.waiting_for_audio)
+    await message.answer(
+        "Маскот получил! 🐻\n"
+        "Теперь пришли аудио (voice или файл) — оживлю его."
+    )
 
 
-@router.message(StateFilter(PhotoFlow.waiting_for_photo))
-async def photo_mode_wrong_input(message: Message) -> None:
-    await message.answer("Жду фото лица (как изображение, не документ).")
+@router.message(StateFilter(MascotFlow.waiting_for_photo))
+async def mascot_wrong_input(message: Message) -> None:
+    await message.answer("Жду фото маскота или персонажа (как изображение).")
 
 
-@router.message(StateFilter(PhotoFlow.waiting_for_audio), F.audio | F.voice)
-async def photo_mode_receive_audio(
+@router.message(StateFilter(MascotFlow.waiting_for_audio), F.audio | F.voice)
+async def mascot_receive_audio(
     message: Message,
     state: FSMContext,
     pipeline: GenerationPipeline,
@@ -54,7 +57,7 @@ async def photo_mode_receive_audio(
     data = await state.get_data()
     avatar_file_id = data.get("avatar_file_id")
     if not avatar_file_id:
-        await message.answer("Начни заново: /photo")
+        await message.answer("Начни заново: /mascot")
         await state.clear()
         return
 
@@ -81,13 +84,13 @@ async def photo_mode_receive_audio(
                 image_file_id=avatar_file_id,
                 audio_file_id=audio.file_id,
                 audio_duration=duration,
-                cartoon=False,
-                kling_fallback=True,
+                cartoon=True,
+                engine="kling",
             )
         )
     )
 
 
-@router.message(StateFilter(PhotoFlow.waiting_for_audio))
-async def photo_mode_wrong_audio(message: Message) -> None:
+@router.message(StateFilter(MascotFlow.waiting_for_audio))
+async def mascot_wrong_audio(message: Message) -> None:
     await message.answer("Жду аудиофайл или voice-сообщение.")

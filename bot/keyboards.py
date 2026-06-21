@@ -16,6 +16,7 @@ CB_FAV_USE = "fav:use:"
 CB_FAV_DEL = "fav:del:"
 CB_FAV_NAME_AUTO = "fav:name:auto"
 CB_PHOTO_MODE = "action:photo_mode"
+CB_MASCOT_MODE = "action:mascot_mode"
 
 
 def _chunked(items: list[InlineKeyboardButton], size: int) -> list[list[InlineKeyboardButton]]:
@@ -27,9 +28,10 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text="🐾 Создать персонажа", callback_data=CB_RESTART)],
             [
+                InlineKeyboardButton(text="🐻 Мой маскот", callback_data=CB_MASCOT_MODE),
                 InlineKeyboardButton(text="⭐ Избранное", callback_data=CB_FAV_LIST),
-                InlineKeyboardButton(text="📷 Своё фото", callback_data=CB_PHOTO_MODE),
             ],
+            [InlineKeyboardButton(text="📷 Своё лицо", callback_data=CB_PHOTO_MODE)],
         ]
     )
 

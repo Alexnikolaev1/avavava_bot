@@ -22,6 +22,8 @@ class Settings:
     replicate_api_token: str
     avatar_model: str
     sadtalker_model: str
+    kling_avatar_model: str
+    kling_avatar_mode: str
     max_audio_seconds: int
     max_concurrent_jobs: int
     user_cooldown_seconds: int
@@ -46,6 +48,11 @@ class Settings:
                 "SADTALKER_MODEL",
                 "lucataco/sadtalker:85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b",
             ),
+            kling_avatar_model=os.environ.get(
+                "KLING_AVATAR_MODEL",
+                "kwaivgi/kling-avatar-v2",
+            ),
+            kling_avatar_mode=os.environ.get("KLING_AVATAR_MODE", "std"),
             max_audio_seconds=_int("MAX_AUDIO_SECONDS", 75),
             max_concurrent_jobs=_int("MAX_CONCURRENT_JOBS", 2),
             user_cooldown_seconds=_int("USER_COOLDOWN_SECONDS", 60),
