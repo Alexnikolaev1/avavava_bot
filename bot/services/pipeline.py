@@ -14,6 +14,7 @@ from bot.config import Settings
 from bot.models.avatar_config import AvatarConfig
 from bot.services.media import (
     AvatarGenerator,
+    ReplicateModelFailed,
     ReplicateService,
     SadTalkerService,
     TelegramIO,
@@ -107,7 +108,14 @@ class GenerationPipeline:
                 await self.safe_edit(
                     job.chat_id,
                     job.status_message_id,
-                    f"Не удалось нарисовать персонажа: {exc}",
+                    self._format_replicate_error(exc),
+                )
+            except ReplicateModelFailed as exc:
+                log.exception("Replicate avatar model failed chat_id=%s", job.chat_id)
+                await self.safe_edit(
+                    job.chat_id,
+                    job.status_message_id,
+                    self._format_model_error(exc),
                 )
             except Exception as exc:  # noqa: BLE001
                 log.exception("Avatar error chat_id=%s", job.chat_id)
@@ -213,25 +221,18 @@ class GenerationPipeline:
                 )
             except replicate.exceptions.ReplicateError as exc:
                 log.exception("Replicate video error chat_id=%s", job.chat_id)
-                detail = str(exc)
-                if "404" in detail or "not found" in detail.lower():
-                    user_msg = (
-                        "Модель SadTalker не найдена на Replicate (404).\n"
-                        "В Railway Variables замени SADTALKER_MODEL на:\n"
-                        "lucataco/sadtalker:85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b"
-                    )
-                elif "402" in detail or "payment" in detail.lower():
-                    user_msg = (
-                        "На Replicate закончился баланс или не подключена оплата. "
-                        "Пополни счёт на replicate.com/account/billing"
-                    )
-                else:
-                    user_msg = (
-                        "Сервис генерации вернул ошибку. "
-                        "Попробуй перегенерировать аватар или другое фото.\n"
-                        f"Детали: {exc}"
-                    )
-                await self.safe_edit(job.chat_id, job.status_message_id, user_msg)
+                await self.safe_edit(
+                    job.chat_id,
+                    job.status_message_id,
+                    self._format_replicate_error(exc),
+                )
+            except ReplicateModelFailed as exc:
+                log.exception("Replicate video model failed chat_id=%s", job.chat_id)
+                await self.safe_edit(
+                    job.chat_id,
+                    job.status_message_id,
+                    self._format_model_error(exc),
+                )
             except Exception as exc:  # noqa: BLE001
                 log.exception("Video error chat_id=%s", job.chat_id)
                 await self.safe_edit(
@@ -241,3 +242,50 @@ class GenerationPipeline:
                 )
             finally:
                 self._active_jobs -= 1
+
+    @staticmethod
+    def _format_replicate_error(exc: replicate.exceptions.ReplicateError) -> str:
+        detail = str(exc)
+        if "404" in detail or "not found" in detail.lower():
+            return (
+                "Модель SadTalker не найдена на Replicate (404).\n"
+                "В Railway Variables замени SADTALKER_MODEL на:\n"
+                "lucataco/sadtalker:85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b"
+            )
+        if "402" in detail or "insufficient credit" in detail.lower():
+            return (
+                "На Replicate недостаточно кредита (402).\n\n"
+                "Проверь replicate.com/account/billing — Credit remaining &gt; $0.\n"
+                "REPLICATE_API_TOKEN должен быть с того же аккаунта."
+            )
+        return f"Сервис Replicate вернул ошибку:\n{exc}"
+
+    @staticmethod
+    def _format_model_error(exc: ReplicateModelFailed) -> str:
+        message = str(exc).lower()
+        logs = (exc.logs or "").lower()
+        combined = f"{message}\n{logs}"
+
+        if "face" in combined or "landmark" in combined or "detect" in combined:
+            return (
+                "SadTalker не нашёл лицо на фото.\n"
+                "Пришли другое: анфас, хорошее освещение, лицо крупно, без очков."
+            )
+        if "audio" in combined or "wav" in combined:
+            return (
+                "SadTalker не смог обработать аудио.\n"
+                "Пришли voice или файл покороче, без сильного шума."
+            )
+        if "exceptions must derive from baseexception" in combined:
+            return (
+                "SadTalker упал на этих файлах (внутренняя ошибка модели).\n"
+                "Попробуй:\n"
+                "• другое фото — чёткий анфас\n"
+                "• аудио 10–30 сек\n"
+                "• режим /start с AI-персонажем вместо /photo"
+            )
+
+        detail = str(exc)
+        if len(detail) > 300:
+            detail = detail[:300] + "…"
+        return f"SadTalker не смог создать видео:\n{detail}"

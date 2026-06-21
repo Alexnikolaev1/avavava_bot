@@ -8,10 +8,19 @@ from typing import Any
 import aiohttp
 import replicate
 from aiogram import Bot
+from replicate.exceptions import ModelError
 
 from bot.config import Settings
 
 log = logging.getLogger(__name__)
+
+
+class ReplicateModelFailed(RuntimeError):
+    """SadTalker/Flux вернули failed prediction с понятным текстом."""
+
+    def __init__(self, message: str, *, logs: str | None = None) -> None:
+        super().__init__(message)
+        self.logs = logs
 
 
 class TelegramIO:
@@ -46,11 +55,33 @@ class ReplicateService:
                     prepared[key] = handle
                 else:
                     prepared[key] = value
-            output = self._client.run(model, input=prepared)
+            try:
+                output = self._client.run(model, input=prepared)
+            except ModelError as exc:
+                raise self._model_error(exc) from exc
             return self._extract_url(output)
         finally:
             for handle in opened:
                 handle.close()
+
+    @staticmethod
+    def _model_error(exc: ModelError) -> ReplicateModelFailed:
+        raw = exc.prediction.error
+        if isinstance(raw, str):
+            message = raw
+        elif raw is None:
+            message = "модель завершилась с ошибкой"
+        else:
+            message = str(raw)
+
+        logs = exc.prediction.logs or ""
+        log.error(
+            "Replicate model failed: %s | prediction=%s | logs_tail=%s",
+            message,
+            exc.prediction.id,
+            logs[-800:],
+        )
+        return ReplicateModelFailed(message, logs=logs)
 
     @staticmethod
     def _extract_url(output: Any) -> str:
@@ -106,6 +137,7 @@ class SadTalkerService:
     ) -> str:
         wav_path = audio_path.with_suffix(".wav")
         await convert_audio_to_wav(audio_path, wav_path)
+        await prepare_face_image(image_path)
 
         model = self._settings.sadtalker_model
         inputs = self._build_inputs(model, image_path, wav_path, cartoon=cartoon)
@@ -135,26 +167,21 @@ class SadTalkerService:
                 "source_image": image_path,
                 "driven_audio": audio_path,
                 "use_enhancer": True,
-                "preprocess": "full",
+                "preprocess": "crop",
                 "still_mode": True,
+                "size_of_image": 256,
             }
 
-        # lucataco/sadtalker и другие форки с классическими полями
-        if cartoon:
-            return {
-                "source_image": image_path,
-                "driven_audio": audio_path,
-                "enhancer": None,
-                "preprocess": "crop",
-                "still": True,
-            }
-        return {
+        # lucataco/sadtalker: не передаём enhancer=None — это ломает cog-модель
+        common = {
             "source_image": image_path,
             "driven_audio": audio_path,
-            "enhancer": "gfpgan",
-            "preprocess": "full",
+            "preprocess": "crop",
             "still": True,
         }
+        if not cartoon:
+            common["enhancer"] = "gfpgan"
+        return common
 
 
 async def convert_audio_to_wav(input_path: Path, output_path: Path) -> None:
@@ -182,6 +209,36 @@ async def convert_audio_to_wav(input_path: Path, output_path: Path) -> None:
         raise RuntimeError(
             f"ffmpeg audio convert failed: {stderr.decode(errors='ignore')[-500:]}"
         )
+
+
+async def prepare_face_image(path: Path, size: int = 512) -> None:
+    """Нормализует фото под SadTalker: квадратный JPEG, лицо по центру."""
+    prepared = path.with_suffix(".prepared.jpg")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(path),
+        "-vf",
+        f"scale={size}:{size}:force_original_aspect_ratio=decrease,"
+        f"pad={size}:{size}:(ow-iw)/2:(oh-ih)/2:color=0xE8E8E8",
+        "-q:v",
+        "2",
+        str(prepared),
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await process.communicate()
+    if process.returncode != 0:
+        log.warning(
+            "Face prepare skipped: %s",
+            stderr.decode(errors="ignore")[-300:],
+        )
+        return
+    prepared.replace(path)
 
 
 async def prepare_avatar_image(path: Path, size: int = 512) -> None:
