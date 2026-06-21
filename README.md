@@ -66,6 +66,7 @@ python main.py
 
 | Переменная | По умолчанию |
 |------------|--------------|
+| `ALLOWED_USER_IDS` | пусто — бот открыт для всех; иначе whitelist по Telegram ID |
 | `AVATAR_MODEL` | `black-forest-labs/flux-schnell` |
 | `SADTALKER_MODEL` | `lucataco/sadtalker:85c698db...` (см. `.env.example`) |
 | `MAX_FAVORITES_PER_USER` | `10` |

@@ -16,6 +16,17 @@ def _int(name: str, default: int) -> int:
     return int(raw) if raw else default
 
 
+def _parse_user_ids(raw: str | None) -> frozenset[int]:
+    if not raw or not raw.strip():
+        return frozenset()
+    ids: set[int] = set()
+    for chunk in raw.replace(";", ",").split(","):
+        part = chunk.strip()
+        if part:
+            ids.add(int(part))
+    return frozenset(ids)
+
+
 @dataclass(frozen=True, slots=True)
 class Settings:
     telegram_bot_token: str
@@ -32,8 +43,14 @@ class Settings:
     max_favorites_per_user: int
     database_path: str
     log_level: str
+    allowed_user_ids: frozenset[int]
 
     telegram_file_limit_bytes: int = 49 * 1024 * 1024
+
+    def is_user_allowed(self, user_id: int) -> bool:
+        if not self.allowed_user_ids:
+            return True
+        return user_id in self.allowed_user_ids
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -61,6 +78,7 @@ class Settings:
             max_favorites_per_user=_int("MAX_FAVORITES_PER_USER", 10),
             database_path=os.environ.get("DATABASE_PATH", "data/bot.db"),
             log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+            allowed_user_ids=_parse_user_ids(os.environ.get("ALLOWED_USER_IDS")),
         )
 
 

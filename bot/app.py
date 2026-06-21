@@ -11,6 +11,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import Settings
 from bot.handlers import avatar, common, favorites, mascot, photo
+from bot.middlewares.access import AccessMiddleware
 from bot.services.favorites import FavoritesStore
 from bot.services.pipeline import GenerationPipeline
 
@@ -35,6 +36,9 @@ def create_app(settings: Settings) -> tuple[Dispatcher, GenerationPipeline, Favo
     dp["favorites"] = favorites_store
 
     router = Router()
+    access = AccessMiddleware()
+    router.message.middleware(access)
+    router.callback_query.middleware(access)
     router.include_router(common.router)
     router.include_router(favorites.router)
     router.include_router(avatar.router)

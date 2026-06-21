@@ -32,6 +32,10 @@ async def main() -> None:
         settings.sadtalker_model,
         settings.kling_avatar_model,
     )
+    if settings.allowed_user_ids:
+        log.info("Access whitelist: %d user(s)", len(settings.allowed_user_ids))
+    else:
+        log.warning("ALLOWED_USER_IDS not set — bot is open to all users")
     try:
         await dp.start_polling(pipeline.bot)
     finally:
