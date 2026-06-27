@@ -25,12 +25,13 @@ async def main() -> None:
     await favorites.connect()
 
     log.info(
-        "Bot started | jobs=%s | favorites=%s | avatar=%s | sadtalker=%s | kling=%s",
+        "Bot started | jobs=%s | favorites=%s | avatar=%s | sadtalker=%s | kling=%s | motion=%s",
         settings.max_concurrent_jobs,
         settings.max_favorites_per_user,
         settings.avatar_model,
         settings.sadtalker_model,
         settings.kling_avatar_model,
+        settings.motion_replace_model,
     )
     if settings.allowed_user_ids:
         log.info("Access whitelist: %d user(s)", len(settings.allowed_user_ids))

@@ -40,6 +40,17 @@ class Settings:
     user_cooldown_seconds: int
     generation_timeout_seconds: int
     avatar_generation_timeout_seconds: int
+    photoshoot_timeout_seconds: int
+    photoshoot_headshot_model: str
+    photoshoot_style_model: str
+    photoshoot_custom_model: str
+    motion_timeout_seconds: int
+    motion_max_video_seconds: int
+    motion_max_video_height: int
+    motion_replace_model: str
+    motion_control_model: str
+    motion_kling_mode: str
+    motion_wan_resolution: str
     max_favorites_per_user: int
     database_path: str
     log_level: str
@@ -75,6 +86,35 @@ class Settings:
             user_cooldown_seconds=_int("USER_COOLDOWN_SECONDS", 60),
             generation_timeout_seconds=_int("GENERATION_TIMEOUT_SECONDS", 600),
             avatar_generation_timeout_seconds=_int("AVATAR_GENERATION_TIMEOUT_SECONDS", 120),
+            photoshoot_timeout_seconds=_int("PHOTOSHOOT_TIMEOUT_SECONDS", 180),
+            photoshoot_headshot_model=os.environ.get(
+                "PHOTOSHOOT_HEADSHOT_MODEL",
+                "flux-kontext-apps/professional-headshot",
+            ),
+            photoshoot_style_model=os.environ.get(
+                "PHOTOSHOOT_STYLE_MODEL",
+                "fofr/face-to-many:edc6439ac55af138defbca7c472b38bcdd62c61797e8e0c2fae88696cd8afb25",
+            ),
+            photoshoot_custom_model=os.environ.get(
+                "PHOTOSHOOT_CUSTOM_MODEL",
+                "mbukerepo/photomaker",
+            ),
+            motion_timeout_seconds=_int("MOTION_TIMEOUT_SECONDS", 900),
+            motion_max_video_seconds=_int("MOTION_MAX_VIDEO_SECONDS", 15),
+            motion_max_video_height=_int("MOTION_MAX_VIDEO_HEIGHT", 720),
+            motion_replace_model=os.environ.get(
+                "MOTION_REPLACE_MODEL",
+                "wan-video/wan-2.2-animate-replace",
+            ),
+            motion_control_model=os.environ.get(
+                "MOTION_CONTROL_MODEL",
+                "kwaivgi/kling-v3-motion-control",
+            ),
+            motion_kling_mode=os.environ.get(
+                "MOTION_KLING_MODE",
+                os.environ.get("KLING_AVATAR_MODE", "std"),
+            ),
+            motion_wan_resolution=os.environ.get("MOTION_WAN_RESOLUTION", "480"),
             max_favorites_per_user=_int("MAX_FAVORITES_PER_USER", 10),
             database_path=os.environ.get("DATABASE_PATH", "data/bot.db"),
             log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),

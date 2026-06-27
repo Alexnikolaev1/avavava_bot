@@ -10,9 +10,12 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.storage.memory import MemoryStorage
 
 from bot.config import Settings
-from bot.handlers import avatar, common, favorites, mascot, photo
+from bot.handlers import avatar, common, favorites, mascot, motion, photo, photoshoot
 from bot.middlewares.access import AccessMiddleware
 from bot.services.favorites import FavoritesStore
+from bot.services.media import ReplicateService
+from bot.services.motion import MotionService
+from bot.services.photoshoot import PhotoshootService
 from bot.services.pipeline import GenerationPipeline
 
 log = logging.getLogger(__name__)
@@ -24,7 +27,20 @@ def create_app(settings: Settings) -> tuple[Dispatcher, GenerationPipeline, Favo
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     semaphore = asyncio.Semaphore(settings.max_concurrent_jobs)
+    replicate = ReplicateService(settings)
     pipeline = GenerationPipeline(bot=bot, settings=settings, semaphore=semaphore)
+    photoshoot_service = PhotoshootService(
+        bot=bot,
+        settings=settings,
+        replicate=replicate,
+        semaphore=semaphore,
+    )
+    motion_service = MotionService(
+        bot=bot,
+        settings=settings,
+        replicate_svc=replicate,
+        semaphore=semaphore,
+    )
     favorites_store = FavoritesStore(
         db_path=Path(settings.database_path),
         max_per_user=settings.max_favorites_per_user,
@@ -34,6 +50,8 @@ def create_app(settings: Settings) -> tuple[Dispatcher, GenerationPipeline, Favo
     dp["pipeline"] = pipeline
     dp["settings"] = settings
     dp["favorites"] = favorites_store
+    dp["photoshoot"] = photoshoot_service
+    dp["motion"] = motion_service
 
     router = Router()
     access = AccessMiddleware()
@@ -44,5 +62,7 @@ def create_app(settings: Settings) -> tuple[Dispatcher, GenerationPipeline, Favo
     router.include_router(avatar.router)
     router.include_router(photo.router)
     router.include_router(mascot.router)
+    router.include_router(photoshoot.router)
+    router.include_router(motion.router)
     dp.include_router(router)
     return dp, pipeline, favorites_store

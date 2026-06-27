@@ -81,6 +81,10 @@ class ReplicateService:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._run_blocking, model, inputs)
 
+    async def run_many(self, model: str, inputs: dict[str, Any]) -> list[str]:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._run_many_blocking, model, inputs)
+
     def _run_blocking(self, model: str, inputs: dict[str, Any]) -> str:
         opened: list[Any] = []
         prepared: dict[str, Any] = {}
@@ -97,6 +101,26 @@ class ReplicateService:
             except ModelError as exc:
                 raise self._model_error(exc) from exc
             return self._extract_url(output)
+        finally:
+            for handle in opened:
+                handle.close()
+
+    def _run_many_blocking(self, model: str, inputs: dict[str, Any]) -> list[str]:
+        opened: list[Any] = []
+        prepared: dict[str, Any] = {}
+        try:
+            for key, value in inputs.items():
+                if isinstance(value, Path):
+                    handle = open(value, "rb")
+                    opened.append(handle)
+                    prepared[key] = handle
+                else:
+                    prepared[key] = value
+            try:
+                output = self._client.run(model, input=prepared)
+            except ModelError as exc:
+                raise self._model_error(exc) from exc
+            return self._extract_urls(output)
         finally:
             for handle in opened:
                 handle.close()
@@ -120,6 +144,13 @@ class ReplicateService:
         if hasattr(output, "url"):
             return str(output.url)
         return str(output)
+
+    @staticmethod
+    def _extract_urls(output: Any) -> list[str]:
+        if isinstance(output, list):
+            urls = [ReplicateService._extract_url(item) for item in output if item is not None]
+            return urls or [ReplicateService._extract_url(output)]
+        return [ReplicateService._extract_url(output)]
 
 
 async def download_url(url: str, destination: Path) -> None:
@@ -393,3 +424,71 @@ async def compress_for_telegram(
         raise RuntimeError(
             f"ffmpeg завершился с ошибкой: {stderr.decode(errors='ignore')[-500:]}"
         )
+
+
+async def get_media_duration(path: Path) -> float:
+    cmd = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
+        str(path),
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"ffprobe failed: {stderr.decode(errors='ignore')[-300:]}"
+        )
+    return float(stdout.decode().strip())
+
+
+async def prepare_reference_video(
+    input_path: Path,
+    output_path: Path,
+    *,
+    max_seconds: int,
+    max_height: int = 720,
+) -> float:
+    """Обрезает и нормализует референс-видео под motion control."""
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(input_path),
+        "-t",
+        str(max_seconds),
+        "-vf",
+        f"scale=-2:{max_height}",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "fast",
+        "-crf",
+        "23",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"ffmpeg video prepare failed: {stderr.decode(errors='ignore')[-500:]}"
+        )
+    return await get_media_duration(output_path)

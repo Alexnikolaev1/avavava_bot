@@ -1,3 +1,3 @@
-from bot.handlers import avatar, common, photo
+from bot.handlers import avatar, common, mascot, motion, photo, photoshoot
 
-__all__ = ["avatar", "common", "photo"]
+__all__ = ["avatar", "common", "mascot", "motion", "photo", "photoshoot"]
