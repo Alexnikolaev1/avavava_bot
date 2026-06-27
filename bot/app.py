@@ -22,7 +22,7 @@ from bot.handlers import (
     motion,
     photo,
     photoshoot,
-    pipeline,
+    pipeline as pipeline_handlers,
     singing,
     subtitles,
 )
@@ -56,7 +56,7 @@ def create_app(
     db_path = Path(settings.database_path)
 
     history_store = HistoryStore(db_path=db_path, max_per_user=settings.max_history_per_user)
-    pipeline = GenerationPipeline(bot=bot, settings=settings, semaphore=semaphore)
+    generation_pipeline = GenerationPipeline(bot=bot, settings=settings, semaphore=semaphore)
     photoshoot_service = PhotoshootService(
         bot=bot,
         settings=settings,
@@ -120,7 +120,7 @@ def create_app(
     pending_store = PendingStore()
 
     dp = Dispatcher(storage=MemoryStorage())
-    dp["pipeline"] = pipeline
+    dp["pipeline"] = generation_pipeline
     dp["settings"] = settings
     dp["favorites"] = favorites_store
     dp["history"] = history_store
@@ -139,7 +139,7 @@ def create_app(
     router.message.middleware(access)
     router.callback_query.middleware(access)
     router.include_router(hub.router)
-    router.include_router(pipeline.router)
+    router.include_router(pipeline_handlers.router)
     router.include_router(history.router)
     router.include_router(common.router)
     router.include_router(favorites.router)
@@ -153,4 +153,4 @@ def create_app(
     router.include_router(singing.router)
     router.include_router(subtitles.router)
     dp.include_router(router)
-    return dp, pipeline, favorites_store, history_store
+    return dp, generation_pipeline, favorites_store, history_store
