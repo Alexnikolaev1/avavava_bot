@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import Settings
-from bot.handlers.common import check_cooldown
+from bot.handlers.jobs import offer_confirm
 from bot.keyboards import (
     CB_MOTION,
     CB_MOTION_MODE,
@@ -17,7 +17,8 @@ from bot.keyboards import (
     motion_modes_keyboard,
 )
 from bot.motion_catalog import MODES
-from bot.services.motion import MotionJob, MotionService
+from bot.services.pending import PendingStore
+from bot.services.pricing import estimate_motion
 from bot.states import MotionFlow
 from bot.texts import MOTION_SEND_PHOTO, MOTION_SEND_VIDEO, MOTION_START
 
@@ -75,7 +76,12 @@ async def cb_motion_restart(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 @router.message(StateFilter(MotionFlow.waiting_for_video), F.video)
-async def receive_video(message: Message, state: FSMContext, settings: Settings) -> None:
+async def receive_video(
+    message: Message,
+    state: FSMContext,
+    settings: Settings,
+    pending: PendingStore,
+) -> None:
     video = message.video
     if video.duration and video.duration > settings.motion_max_video_seconds:
         await message.answer(
@@ -83,22 +89,21 @@ async def receive_video(message: Message, state: FSMContext, settings: Settings)
             "Пришли покороче или обрежь клип."
         )
         return
-
-    await state.update_data(video_file_id=video.file_id)
-    await state.set_state(MotionFlow.waiting_for_photo)
-    await message.answer(MOTION_SEND_PHOTO)
+    await _after_video_received(message, state, settings, pending, video.file_id, video.duration)
 
 
 @router.message(StateFilter(MotionFlow.waiting_for_video), F.document)
-async def receive_video_document(message: Message, state: FSMContext, settings: Settings) -> None:
+async def receive_video_document(
+    message: Message,
+    state: FSMContext,
+    settings: Settings,
+    pending: PendingStore,
+) -> None:
     doc = message.document
     if not doc.mime_type or not doc.mime_type.startswith("video/"):
         await message.answer("Жду видеофайл (mp4/mov) или отправь как видео, не документ.")
         return
-
-    await state.update_data(video_file_id=doc.file_id)
-    await state.set_state(MotionFlow.waiting_for_photo)
-    await message.answer(MOTION_SEND_PHOTO)
+    await _after_video_received(message, state, settings, pending, doc.file_id, None)
 
 
 @router.message(StateFilter(MotionFlow.waiting_for_video))
@@ -111,7 +116,7 @@ async def receive_photo(
     message: Message,
     state: FSMContext,
     settings: Settings,
-    motion: MotionService,
+    pending: PendingStore,
 ) -> None:
     data = await state.get_data()
     video_file_id = data.get("video_file_id")
@@ -120,23 +125,46 @@ async def receive_photo(
         await message.answer("Начни заново: /motion")
         await state.clear()
         return
+    await state.update_data(photo_file_id=message.photo[-1].file_id)
+    await _offer_motion_confirm(message, state, settings, pending, message.from_user.id)
 
-    wait = check_cooldown(message.from_user.id, settings)
-    if wait is not None:
-        await message.answer(f"Слишком часто. Подожди ещё {wait} сек.")
+
+async def _after_video_received(
+    message: Message,
+    state: FSMContext,
+    settings: Settings,
+    pending: PendingStore,
+    video_file_id: str,
+    duration: int | None,
+) -> None:
+    await state.update_data(video_file_id=video_file_id, video_duration=duration)
+    data = await state.get_data()
+    if data.get("pipeline_photo") and data.get("photo_file_id"):
+        await _offer_motion_confirm(message, state, settings, pending, message.from_user.id)
         return
+    await state.set_state(MotionFlow.waiting_for_photo)
+    await message.answer(MOTION_SEND_PHOTO)
 
-    photo_file_id = message.photo[-1].file_id
+
+async def _offer_motion_confirm(
+    message: Message,
+    state: FSMContext,
+    settings: Settings,
+    pending: PendingStore,
+    user_id: int,
+) -> None:
+    data = await state.get_data()
+    mode = data.get("mode", "kling")
+    seconds = data.get("video_duration") or settings.motion_max_video_seconds
+    seconds = min(int(seconds), settings.motion_max_video_seconds)
+    cost = estimate_motion(mode, seconds, kling_mode=settings.motion_kling_mode)
+    payload = {
+        "mode": mode,
+        "video_file_id": data["video_file_id"],
+        "photo_file_id": data["photo_file_id"],
+    }
     await state.clear()
-    status = await message.answer("Принял в обработку. Это может занять 5–15 минут...")
-    job = MotionJob(
-        chat_id=message.chat.id,
-        status_message_id=status.message_id,
-        mode=mode,
-        video_file_id=video_file_id,
-        photo_file_id=photo_file_id,
-    )
-    asyncio.create_task(motion.run(job))
+    await offer_confirm(message, pending, user_id, "motion", payload, cost)
 
 
 @router.message(StateFilter(MotionFlow.waiting_for_photo))

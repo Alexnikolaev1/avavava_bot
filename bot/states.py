@@ -36,3 +36,39 @@ class MotionFlow(StatesGroup):
     choosing_mode = State()
     waiting_for_video = State()
     waiting_for_photo = State()
+
+
+class RestoreFlow(StatesGroup):
+    choosing_mode = State()
+    waiting_for_photo = State()
+
+
+class SceneFlow(StatesGroup):
+    choosing_type = State()
+    choosing_preset = State()
+    waiting_for_photo = State()
+
+
+class I2VFlow(StatesGroup):
+    waiting_for_photo = State()
+    waiting_for_prompt = State()
+    choosing_duration = State()
+
+
+class VoiceFlow(StatesGroup):
+    waiting_for_sample = State()
+    choosing_language = State()
+    waiting_for_text = State()
+
+
+class SingingFlow(StatesGroup):
+    waiting_for_photo = State()
+    waiting_for_audio = State()
+
+
+class StickerFlow(StatesGroup):
+    waiting_for_photo = State()
+
+
+class SubtitlesFlow(StatesGroup):
+    waiting_for_video = State()

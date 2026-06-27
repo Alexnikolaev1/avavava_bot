@@ -21,8 +21,9 @@ def setup_logging(level: str) -> None:
 async def main() -> None:
     setup_logging(settings.log_level)
     log = logging.getLogger("main")
-    dp, pipeline, favorites = create_app(settings)
+    dp, pipeline, favorites, history = create_app(settings)
     await favorites.connect()
+    await history.connect()
 
     log.info(
         "Bot started | jobs=%s | favorites=%s | avatar=%s | sadtalker=%s | kling=%s | motion=%s",
@@ -41,6 +42,7 @@ async def main() -> None:
         await dp.start_polling(pipeline.bot)
     finally:
         await favorites.close()
+        await history.close()
 
 
 if __name__ == "__main__":

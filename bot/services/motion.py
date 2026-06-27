@@ -12,6 +12,7 @@ from aiogram import Bot
 from aiogram.types import FSInputFile
 
 from bot.config import Settings
+from bot.services.history import HistoryStore
 from bot.services.media import (
     ReplicateModelFailed,
     ReplicateService,
@@ -27,6 +28,7 @@ log = logging.getLogger(__name__)
 @dataclass(slots=True)
 class MotionJob:
     chat_id: int
+    user_id: int
     status_message_id: int
     mode: str
     video_file_id: str
@@ -39,11 +41,13 @@ class MotionService:
         bot: Bot,
         settings: Settings,
         replicate_svc: ReplicateService,
+        history: HistoryStore,
         semaphore: asyncio.Semaphore,
     ) -> None:
         self._bot = bot
         self._settings = settings
         self._replicate = replicate_svc
+        self._history = history
         self._io = TelegramIO(bot)
         self._semaphore = semaphore
 
@@ -132,11 +136,24 @@ class MotionService:
                         job.status_message_id,
                         "Готово! Отправляю видео...",
                     )
-                    await self._bot.send_video(
+                    sent = await self._bot.send_video(
                         chat_id=job.chat_id,
                         video=FSInputFile(final_video),
                         caption="Готово 💃",
                         supports_streaming=True,
+                    )
+                    item = await self._history.add(
+                        job.user_id,
+                        "motion",
+                        f"Motion ({job.mode})",
+                        image_file_id=job.photo_file_id,
+                        video_file_id=sent.video.file_id,
+                    )
+                    from bot.keyboards import video_pipeline_keyboard
+                    await self._bot.send_message(
+                        job.chat_id,
+                        "Что дальше?",
+                        reply_markup=video_pipeline_keyboard(item.id),
                     )
             except asyncio.TimeoutError:
                 log.exception("Motion timed out chat_id=%s", job.chat_id)

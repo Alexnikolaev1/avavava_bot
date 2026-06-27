@@ -51,6 +51,20 @@ class Settings:
     motion_control_model: str
     motion_kling_mode: str
     motion_wan_resolution: str
+    max_history_per_user: int
+    creative_timeout_seconds: int
+    restore_model: str
+    upscale_model: str
+    iconic_scene_model: str
+    impossible_scene_model: str
+    i2v_model: str
+    i2v_mode: str
+    i2v_timeout_seconds: int
+    voice_clone_model: str
+    voice_timeout_seconds: int
+    remove_bg_model: str
+    whisper_model: str
+    subtitles_timeout_seconds: int
     max_favorites_per_user: int
     database_path: str
     log_level: str
@@ -115,6 +129,41 @@ class Settings:
                 os.environ.get("KLING_AVATAR_MODE", "std"),
             ),
             motion_wan_resolution=os.environ.get("MOTION_WAN_RESOLUTION", "480"),
+            max_history_per_user=_int("MAX_HISTORY_PER_USER", 30),
+            creative_timeout_seconds=_int("CREATIVE_TIMEOUT_SECONDS", 180),
+            restore_model=os.environ.get(
+                "RESTORE_MODEL",
+                "flux-kontext-apps/restore-image",
+            ),
+            upscale_model=os.environ.get(
+                "UPSCALE_MODEL",
+                "nightmareai/real-esrgan",
+            ),
+            iconic_scene_model=os.environ.get(
+                "ICONIC_SCENE_MODEL",
+                "flux-kontext-apps/iconic-locations",
+            ),
+            impossible_scene_model=os.environ.get(
+                "IMPOSSIBLE_SCENE_MODEL",
+                "flux-kontext-apps/impossible-scenarios",
+            ),
+            i2v_model=os.environ.get("I2V_MODEL", "kwaivgi/kling-v2.1"),
+            i2v_mode=os.environ.get("I2V_MODE", "standard"),
+            i2v_timeout_seconds=_int("I2V_TIMEOUT_SECONDS", 600),
+            voice_clone_model=os.environ.get(
+                "VOICE_CLONE_MODEL",
+                "lucataco/xtts-v2",
+            ),
+            voice_timeout_seconds=_int("VOICE_TIMEOUT_SECONDS", 120),
+            remove_bg_model=os.environ.get(
+                "REMOVE_BG_MODEL",
+                "851-labs/background-remover",
+            ),
+            whisper_model=os.environ.get(
+                "WHISPER_MODEL",
+                "vaibhavs10/incredibly-fast-whisper",
+            ),
+            subtitles_timeout_seconds=_int("SUBTITLES_TIMEOUT_SECONDS", 300),
             max_favorites_per_user=_int("MAX_FAVORITES_PER_USER", 10),
             database_path=os.environ.get("DATABASE_PATH", "data/bot.db"),
             log_level=os.environ.get("LOG_LEVEL", "INFO").upper(),

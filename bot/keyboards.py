@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from bot.catalog import ANIMALS, EMOTIONS, GENDERS, STYLES
 from bot.motion_catalog import MODES
+from bot.creative_catalog import ICONIC_LOCATIONS, IMPOSSIBLE_SCENES, RESTORE_MODES, VOICE_LANGUAGES
 from bot.photoshoot_catalog import (
     FACE_TO_MANY_STYLES,
     HEADSHOT_BACKGROUNDS,
@@ -37,25 +38,100 @@ CB_PS_RESTART = "ps:restart"
 CB_MOTION = "action:motion"
 CB_MOTION_MODE = "motion:mode:"
 CB_MOTION_RESTART = "motion:restart"
+CB_HUB_TALKING = "hub:talking"
+CB_HUB_PHOTO = "hub:photo"
+CB_HUB_VIDEO = "hub:video"
+CB_HUB_VOICE = "hub:voice"
+CB_HUB_HISTORY = "hub:history"
+CB_HUB_HOME = "hub:home"
+CB_RESTORE = "action:restore"
+CB_SCENE = "action:scene"
+CB_I2V = "action:i2v"
+CB_VOICE = "action:voice"
+CB_SINGING = "action:singing"
+CB_STICKERS = "action:stickers"
+CB_SUBS = "action:subs"
+CB_RESTORE_MODE = "restore:mode:"
+CB_SCENE_TYPE = "scene:type:"
+CB_SCENE_PRESET = "scene:preset:"
+CB_I2V_DUR = "i2v:dur:"
+CB_VOICE_LANG = "voice:lang:"
+CB_CONFIRM_OK = "confirm:ok:"
+CB_CONFIRM_NO = "confirm:no"
+CB_PIPE_LIP = "pipe:lip:"
+CB_PIPE_MOTION = "pipe:motion:"
+CB_PIPE_I2V = "pipe:i2v:"
+CB_PIPE_SUBS = "pipe:subs:"
+CB_PIPE_VOICE_LIP = "pipe:voicelip:"
+CB_HIST_RERUN = "hist:rerun:"
+CB_FAV_DANCE = "fav:dance:"
 
 
 def _chunked(items: list[InlineKeyboardButton], size: int) -> list[list[InlineKeyboardButton]]:
     return [items[i : i + size] for i in range(0, len(items), size)]
 
 
-def main_menu_keyboard() -> InlineKeyboardMarkup:
+def hub_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🗣 Говорящие аватары", callback_data=CB_HUB_TALKING)],
+            [InlineKeyboardButton(text="📸 Фото и сцены", callback_data=CB_HUB_PHOTO)],
+            [InlineKeyboardButton(text="🎬 Видео-эффекты", callback_data=CB_HUB_VIDEO)],
+            [InlineKeyboardButton(text="🎙 Голос", callback_data=CB_HUB_VOICE)],
+            [
+                InlineKeyboardButton(text="📚 История", callback_data=CB_HUB_HISTORY),
+                InlineKeyboardButton(text="⭐ Избранное", callback_data=CB_FAV_LIST),
+            ],
+        ]
+    )
+
+
+def hub_talking_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🐾 Создать персонажа", callback_data=CB_RESTART)],
-            [InlineKeyboardButton(text="📸 Нейрофотосессия", callback_data=CB_PHOTOSHOOT)],
-            [InlineKeyboardButton(text="💃 Motion / Танец", callback_data=CB_MOTION)],
-            [
-                InlineKeyboardButton(text="🐻 Мой маскот", callback_data=CB_MASCOT_MODE),
-                InlineKeyboardButton(text="⭐ Избранное", callback_data=CB_FAV_LIST),
-            ],
             [InlineKeyboardButton(text="📷 Своё лицо", callback_data=CB_PHOTO_MODE)],
+            [InlineKeyboardButton(text="🐻 Мой маскот", callback_data=CB_MASCOT_MODE)],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CB_HUB_HOME)],
         ]
     )
+
+
+def hub_photo_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📸 Нейрофотосессия", callback_data=CB_PHOTOSHOOT)],
+            [InlineKeyboardButton(text="🩹 Реставрация фото", callback_data=CB_RESTORE)],
+            [InlineKeyboardButton(text="🌍 Сцена / мем", callback_data=CB_SCENE)],
+            [InlineKeyboardButton(text="😀 Стикер-пак", callback_data=CB_STICKERS)],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CB_HUB_HOME)],
+        ]
+    )
+
+
+def hub_video_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💃 Motion / Танец", callback_data=CB_MOTION)],
+            [InlineKeyboardButton(text="🎥 Видео по промпту", callback_data=CB_I2V)],
+            [InlineKeyboardButton(text="🎤 Поющий аватар", callback_data=CB_SINGING)],
+            [InlineKeyboardButton(text="📝 Субтитры", callback_data=CB_SUBS)],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CB_HUB_HOME)],
+        ]
+    )
+
+
+def hub_voice_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎙 Клон голоса + текст", callback_data=CB_VOICE)],
+            [InlineKeyboardButton(text="🏠 Главное меню", callback_data=CB_HUB_HOME)],
+        ]
+    )
+
+
+def main_menu_keyboard() -> InlineKeyboardMarkup:
+    return hub_menu_keyboard()
 
 
 def animals_keyboard() -> InlineKeyboardMarkup:
@@ -154,12 +230,178 @@ def favorites_list_keyboard(favorites: list) -> InlineKeyboardMarkup:
                     callback_data=f"{CB_FAV_USE}{fav.id}",
                 ),
                 InlineKeyboardButton(
+                    text="💃",
+                    callback_data=f"{CB_FAV_DANCE}{fav.id}",
+                ),
+                InlineKeyboardButton(
                     text="🗑",
                     callback_data=f"{CB_FAV_DEL}{fav.id}",
                 ),
             ]
         )
-    rows.append([InlineKeyboardButton(text="🐾 Новый персонаж", callback_data=CB_RESTART)])
+    rows.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data=CB_HUB_HOME)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def confirm_cost_keyboard(token: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="✅ Запустить",
+                    callback_data=f"{CB_CONFIRM_OK}{token}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Отмена",
+                    callback_data=f"{CB_CONFIRM_NO}{token}",
+                ),
+            ]
+        ]
+    )
+
+
+def image_pipeline_keyboard(history_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗣 Оживить (lip-sync)",
+                    callback_data=f"{CB_PIPE_LIP}{history_id}",
+                ),
+                InlineKeyboardButton(
+                    text="💃 Танец",
+                    callback_data=f"{CB_PIPE_MOTION}{history_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🎥 Видео по промпту",
+                    callback_data=f"{CB_PIPE_I2V}{history_id}",
+                ),
+                InlineKeyboardButton(
+                    text="🎤 Пою",
+                    callback_data=f"{CB_PIPE_VOICE_LIP}{history_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def video_pipeline_keyboard(history_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="📝 Субтитры",
+                    callback_data=f"{CB_PIPE_SUBS}{history_id}",
+                ),
+                InlineKeyboardButton(
+                    text="🔄 Re-run",
+                    callback_data=f"{CB_HIST_RERUN}{history_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def audio_pipeline_keyboard(history_id: int) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗣 Lip-sync с этим аудио",
+                    callback_data=f"{CB_PIPE_VOICE_LIP}{history_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def restore_modes_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"{CB_RESTORE_MODE}{key}",
+            )
+        ]
+        for key, (label, _) in RESTORE_MODES.items()
+    ]
+    rows.append([InlineKeyboardButton(text="❌ Отмена", callback_data=CB_HUB_HOME)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def scene_type_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🗼 Известные места",
+                    callback_data=f"{CB_SCENE_TYPE}iconic",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🚀 Невозможные мемы",
+                    callback_data=f"{CB_SCENE_TYPE}impossible",
+                )
+            ],
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=CB_HUB_HOME)],
+        ]
+    )
+
+
+def scene_presets_keyboard(scene_type: str) -> InlineKeyboardMarkup:
+    presets = ICONIC_LOCATIONS if scene_type == "iconic" else IMPOSSIBLE_SCENES
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=preset.label_ru,
+                callback_data=f"{CB_SCENE_PRESET}{preset.key}",
+            )
+        ]
+        for preset in presets.values()
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def i2v_duration_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="5 сек", callback_data=f"{CB_I2V_DUR}5"),
+                InlineKeyboardButton(text="10 сек", callback_data=f"{CB_I2V_DUR}10"),
+            ]
+        ]
+    )
+
+
+def voice_language_keyboard() -> InlineKeyboardMarkup:
+    rows = [
+        [
+            InlineKeyboardButton(
+                text=label,
+                callback_data=f"{CB_VOICE_LANG}{key}",
+            )
+        ]
+        for key, label in VOICE_LANGUAGES.items()
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def history_list_keyboard(items: list) -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    for item in items:
+        label = item.title[:28] + ("…" if len(item.title) > 28 else "")
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"🔄 {label}",
+                    callback_data=f"{CB_HIST_RERUN}{item.id}",
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data=CB_HUB_HOME)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

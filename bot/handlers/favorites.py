@@ -12,6 +12,7 @@ from bot.config import Settings
 from bot.handlers.common import check_cooldown, show_favorites_list
 from bot.keyboards import (
     CB_FAV_DEL,
+    CB_FAV_DANCE,
     CB_FAV_LIST,
     CB_FAV_NAME_AUTO,
     CB_FAV_SAVE,
@@ -22,8 +23,17 @@ from bot.keyboards import (
 from bot.models.avatar_config import AvatarConfig
 from bot.services.favorites import FavoritesStore
 from bot.services.pipeline import GenerationPipeline
-from bot.states import AvatarFlow
-from bot.texts import FAV_ASK_NAME, FAV_DELETED, FAV_LIMIT, FAV_LOADED, FAV_SAVED, STATUS, avatar_ready_text
+from bot.states import AvatarFlow, MotionFlow
+from bot.texts import (
+    FAV_ASK_NAME,
+    FAV_DELETED,
+    FAV_LIMIT,
+    FAV_LOADED,
+    FAV_SAVED,
+    MOTION_SEND_VIDEO,
+    STATUS,
+    avatar_ready_text,
+)
 
 router = Router()
 
@@ -150,6 +160,32 @@ async def cb_fav_delete(callback: CallbackQuery, favorites: FavoritesStore) -> N
         await show_favorites_list(callback.message, favorites, callback.from_user.id, edit=True)
     else:
         await callback.answer("Не найдено", show_alert=True)
+
+
+@router.callback_query(F.data.startswith(CB_FAV_DANCE))
+async def cb_fav_dance(
+    callback: CallbackQuery,
+    state: FSMContext,
+    settings: Settings,
+    favorites: FavoritesStore,
+) -> None:
+    fav_id = int(callback.data.removeprefix(CB_FAV_DANCE))
+    favorite = await favorites.get(callback.from_user.id, fav_id)
+    if not favorite:
+        await callback.answer("Персонаж не найден", show_alert=True)
+        return
+    await state.clear()
+    await state.update_data(
+        mode="kling",
+        photo_file_id=favorite.avatar_file_id,
+        pipeline_photo=True,
+    )
+    await state.set_state(MotionFlow.waiting_for_video)
+    await callback.message.answer(
+        f"💃 Персонаж «{favorite.name}» выбран.\n"
+        + MOTION_SEND_VIDEO.format(max_seconds=settings.motion_max_video_seconds)
+    )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith(CB_FAV_USE))

@@ -8,7 +8,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.config import Settings
-from bot.handlers.common import check_cooldown
+from bot.handlers.jobs import offer_confirm
+from bot.services.pending import PendingStore
+from bot.services.pricing import estimate_photoshoot
 from bot.keyboards import (
     CB_PHOTOSHOOT,
     CB_PS_DEFAULT_PROMPT,
@@ -28,7 +30,6 @@ from bot.keyboards import (
     photoshoot_presets_keyboard,
 )
 from bot.photoshoot_catalog import CUSTOM_PROMPT_HINTS, PRESETS
-from bot.services.photoshoot import PhotoshootJob, PhotoshootService
 from bot.states import PhotoshootFlow
 from bot.texts import (
     PHOTOSHOOT_CHOOSE_ART,
@@ -165,11 +166,11 @@ async def cb_choose_gender(
     callback: CallbackQuery,
     state: FSMContext,
     settings: Settings,
-    photoshoot: PhotoshootService,
+    pending: PendingStore,
 ) -> None:
     gender = callback.data.removeprefix(CB_PS_GENDER)
     await state.update_data(gender=None if gender == "skip" else gender)
-    await _launch_generation(callback.message, state, settings, photoshoot, callback.from_user.id)
+    await _launch_generation(callback.message, state, settings, pending, callback.from_user.id)
     await callback.answer()
 
 
@@ -181,11 +182,11 @@ async def cb_choose_art_style(
     callback: CallbackQuery,
     state: FSMContext,
     settings: Settings,
-    photoshoot: PhotoshootService,
+    pending: PendingStore,
 ) -> None:
     style_key = callback.data.removeprefix(CB_PS_FTM)
     await state.update_data(ftm_style_key=style_key)
-    await _launch_generation(callback.message, state, settings, photoshoot, callback.from_user.id)
+    await _launch_generation(callback.message, state, settings, pending, callback.from_user.id)
     await callback.answer()
 
 
@@ -212,10 +213,10 @@ async def cb_default_prompt(
     callback: CallbackQuery,
     state: FSMContext,
     settings: Settings,
-    photoshoot: PhotoshootService,
+    pending: PendingStore,
 ) -> None:
     await state.update_data(custom_prompt="a photo of a person img, professional studio portrait")
-    await _launch_generation(callback.message, state, settings, photoshoot, callback.from_user.id)
+    await _launch_generation(callback.message, state, settings, pending, callback.from_user.id)
     await callback.answer()
 
 
@@ -224,14 +225,14 @@ async def receive_custom_prompt(
     message: Message,
     state: FSMContext,
     settings: Settings,
-    photoshoot: PhotoshootService,
+    pending: PendingStore,
 ) -> None:
     prompt = (message.text or "").strip()
     if len(prompt) < 5:
         await message.answer("Промпт слишком короткий. Опиши образ подробнее.")
         return
     await state.update_data(custom_prompt=prompt)
-    await _launch_generation(message, state, settings, photoshoot, message.from_user.id)
+    await _launch_generation(message, state, settings, pending, message.from_user.id)
 
 
 @router.message(StateFilter(PhotoshootFlow.waiting_custom_prompt))
@@ -258,7 +259,7 @@ async def _launch_generation(
     message: Message,
     state: FSMContext,
     settings: Settings,
-    photoshoot: PhotoshootService,
+    pending: PendingStore,
     user_id: int,
 ) -> None:
     data = await state.get_data()
@@ -268,23 +269,16 @@ async def _launch_generation(
         await state.clear()
         return
 
-    wait = check_cooldown(user_id, settings)
-    if wait is not None:
-        await message.answer(f"Слишком часто. Подожди ещё {wait} сек.")
-        return
-
-    job = PhotoshootJob(
-        chat_id=message.chat.id,
-        status_message_id=0,
-        preset=data.get("preset", "official"),
-        photo_file_ids=photos,
-        gender=data.get("gender"),
-        background=data.get("background", "neutral"),
-        ftm_style_key=data.get("ftm_style_key", "3d"),
-        pm_style_key=data.get("pm_style_key", "photo"),
-        custom_prompt=data.get("custom_prompt"),
-    )
+    preset = data.get("preset", "official")
+    cost = estimate_photoshoot(preset)
+    payload = {
+        "preset": preset,
+        "photo_file_ids": photos,
+        "gender": data.get("gender"),
+        "background": data.get("background", "neutral"),
+        "ftm_style_key": data.get("ftm_style_key", "3d"),
+        "pm_style_key": data.get("pm_style_key", "photo"),
+        "custom_prompt": data.get("custom_prompt"),
+    }
     await state.clear()
-    status = await message.answer("Принял в обработку. Генерирую фото...")
-    job.status_message_id = status.message_id
-    asyncio.create_task(photoshoot.run(job))
+    await offer_confirm(message, pending, user_id, "photoshoot", payload, cost)

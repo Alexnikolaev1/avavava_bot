@@ -85,6 +85,10 @@ class ReplicateService:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._run_many_blocking, model, inputs)
 
+    async def run_raw(self, model: str, inputs: dict[str, Any]) -> Any:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, self._run_raw_blocking, model, inputs)
+
     def _run_blocking(self, model: str, inputs: dict[str, Any]) -> str:
         opened: list[Any] = []
         prepared: dict[str, Any] = {}
@@ -121,6 +125,25 @@ class ReplicateService:
             except ModelError as exc:
                 raise self._model_error(exc) from exc
             return self._extract_urls(output)
+        finally:
+            for handle in opened:
+                handle.close()
+
+    def _run_raw_blocking(self, model: str, inputs: dict[str, Any]) -> Any:
+        opened: list[Any] = []
+        prepared: dict[str, Any] = {}
+        try:
+            for key, value in inputs.items():
+                if isinstance(value, Path):
+                    handle = open(value, "rb")
+                    opened.append(handle)
+                    prepared[key] = handle
+                else:
+                    prepared[key] = value
+            try:
+                return self._client.run(model, input=prepared)
+            except ModelError as exc:
+                raise self._model_error(exc) from exc
         finally:
             for handle in opened:
                 handle.close()

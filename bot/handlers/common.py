@@ -22,9 +22,7 @@ router = Router()
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await state.set_state(AvatarFlow.choosing_animal)
     await message.answer(WELCOME, reply_markup=main_menu_keyboard())
-    await message.answer("Кого нарисуем? Выбери животное 👇", reply_markup=animals_keyboard())
 
 
 @router.message(Command("help"))

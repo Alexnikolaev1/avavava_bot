@@ -13,6 +13,7 @@ from aiogram.types import FSInputFile, InputMediaPhoto
 
 from bot.config import Settings
 from bot.photoshoot_catalog import FACE_TO_MANY_STYLES, PHOTOMAKER_STYLES
+from bot.services.history import HistoryStore
 from bot.services.media import ReplicateModelFailed, ReplicateService, TelegramIO
 
 log = logging.getLogger(__name__)
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 @dataclass(slots=True)
 class PhotoshootJob:
     chat_id: int
+    user_id: int
     status_message_id: int
     preset: str
     photo_file_ids: list[str]
@@ -37,11 +39,13 @@ class PhotoshootService:
         bot: Bot,
         settings: Settings,
         replicate: ReplicateService,
+        history: HistoryStore,
         semaphore: asyncio.Semaphore,
     ) -> None:
         self._bot = bot
         self._settings = settings
         self._replicate = replicate
+        self._history = history
         self._io = TelegramIO(bot)
         self._semaphore = semaphore
 
@@ -83,7 +87,7 @@ class PhotoshootService:
                         job.status_message_id,
                         f"Готово! Отправляю {len(urls)} фото...",
                     )
-                    await self._send_results(job.chat_id, urls, tmp)
+                    await self._send_results(job, urls, tmp)
             except asyncio.TimeoutError:
                 log.exception("Photoshoot timed out chat_id=%s", job.chat_id)
                 await self.safe_edit(
@@ -198,7 +202,8 @@ class PhotoshootService:
             "custom": "Генерирую фото по твоему промпту...",
         }.get(preset, "Генерирую фото...")
 
-    async def _send_results(self, chat_id: int, urls: list[str], tmp: Path) -> None:
+    async def _send_results(self, job: PhotoshootJob, urls: list[str], tmp: Path) -> None:
+        chat_id = job.chat_id
         local_paths: list[Path] = []
         for idx, url in enumerate(urls[:10]):
             path = tmp / f"result_{idx}.png"
@@ -210,10 +215,24 @@ class PhotoshootService:
             return
 
         if len(local_paths) == 1:
-            await self._bot.send_photo(
+            sent = await self._bot.send_photo(
                 chat_id=chat_id,
                 photo=FSInputFile(local_paths[0]),
                 caption="Готово 📸",
+            )
+            photo_id = sent.photo[-1].file_id
+            item = await self._history.add(
+                job.user_id,
+                "photoshoot",
+                f"Фотосессия ({job.preset})",
+                image_file_id=photo_id,
+                meta={"preset": job.preset},
+            )
+            from bot.keyboards import image_pipeline_keyboard
+            await self._bot.send_message(
+                chat_id,
+                "Что сделать с результатом?",
+                reply_markup=image_pipeline_keyboard(item.id),
             )
             return
 
@@ -222,4 +241,21 @@ class PhotoshootService:
             for path in local_paths[:10]
         ]
         await self._bot.send_media_group(chat_id=chat_id, media=media)
-        await self._bot.send_message(chat_id, f"Готово 📸 — {len(local_paths)} варианта")
+        first = await self._bot.send_photo(
+            chat_id=chat_id,
+            photo=FSInputFile(local_paths[0]),
+        )
+        photo_id = first.photo[-1].file_id
+        item = await self._history.add(
+            job.user_id,
+            "photoshoot",
+            f"Фотосессия ({job.preset})",
+            image_file_id=photo_id,
+            meta={"preset": job.preset, "count": len(local_paths)},
+        )
+        from bot.keyboards import image_pipeline_keyboard
+        await self._bot.send_message(
+            chat_id,
+            f"Готово 📸 — {len(local_paths)} варианта. Что дальше?",
+            reply_markup=image_pipeline_keyboard(item.id),
+        )
